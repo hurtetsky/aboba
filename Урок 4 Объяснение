@@ -1,0 +1,167 @@
+import java.util.HashMap;
+import java.util.ArrayList;
+import java.io.IOException;
+import java.io.*;
+
+//TODO --> записать методы открытия и считывания файла через Buffer/FileWriter, перекодировки значений методов определения и закрепления геодезической точки, прикладной работы с точками.
+public class FileHandler{
+  private static int counter = 0;
+  private static String[] arr;
+  private static ArrayList<GeodeticPoint> GPoint = new ArrayList<>();
+  private static int globalnum = 0;
+  private static String globalcontur;
+  public static String decodeDefiningMethod(String code){
+    HashMap<String, String> def_dict = new HashMap<>();
+    //забиваем наш словарь методов определений
+    def_dict.put("692001000000", "Геодезический метод");
+    def_dict.put("692002000000", "Фотограмметрический метод");
+    def_dict.put("692003000000", "Картометрический метод");
+    def_dict.put("692004000000", "Иное описание");
+    def_dict.put("692005000000", "Метод спутниковых геодезических измерений");
+    def_dict.put("692006000000", "Аналитический метод");
+    String decode_def;
+    if (def_dict.containsKey(code) == true){
+      decode_def = def_dict.get(code);
+    }
+    else{
+      decode_def = "Иной метод";
+      //ставлю по умолчанию
+    }
+    return decode_def;
+  }
+  public static String decodePinningMethod(String code){
+    HashMap<String, String> pin_dict = new HashMap<>();
+    //запись словаря закреплений
+    pin_dict.put("626001000000", "Долговременный межевой знак");
+    pin_dict.put("626002000000", "Временный межевой знак");
+    pin_dict.put("626003000000", "Закрепление отсутствует");
+    String decode_pin;
+    if (pin_dict.containsKey(code) == true){
+      decode_pin = pin_dict.get(code);
+    }
+    else{
+      decode_pin = "Закрепление отсутствует";
+      //ставлю по умолчанию
+    }
+    return decode_pin;
+  }
+  public static void ReadFile(String filename) throws IOException{
+    Reader reader = new FileReader(filename);
+    BufferedReader buffReader = new BufferedReader(reader);
+    int i = 0; // счётчик индексов строк
+    while (buffReader.ready()){
+      String s_line = buffReader.readLine();
+      //Контур;Номер;X;Y;Метод определения;Погрешность;Описание закрепления
+      arr = s_line.split(";");
+      if (i > 1){
+        String contur = arr[0];
+        globalcontur = contur;
+        int number = Integer.parseInt(arr[1]);
+        globalnum = number;
+        //replace , --> . (string --> double)
+        arr[2] = arr[2].replace(',', '.');
+        arr[3] = arr[3].replace(',', '.');
+        arr[5] = arr[5].replace(',', '.');
+        double x = Double.parseDouble(arr[2]);
+        double y = Double.parseDouble(arr[3]);
+        // достаю код определения, делаю сплит
+        String[] temp_def_code = arr[4].split(" ");
+        String def_code = temp_def_code[1];
+        double inaccuracy = Double.parseDouble(arr[5]);
+        String[] temp_pin_code = arr[6].split(" ");
+        String pin_code = temp_pin_code[1];
+        // создаю точку
+        String decoded_def = FileHandler.decodeDefiningMethod(def_code);
+        String decoded_pin = FileHandler.decodePinningMethod(pin_code);
+        System.out.println(s_line);
+        System.out.println(decoded_def);
+        System.out.println(decoded_pin);
+        System.out.println("||||||||||");
+        GeodeticPoint gp = new GeodeticPoint(x, y);
+        gp.definePinning_Method(decoded_pin);
+        gp.defineMethod_of_Defining(decoded_def);
+        gp.defineInaccuracy(inaccuracy);
+        gp.setNum(number);
+        GPoint.add(gp);
+        counter++;
+        
+      }
+      i++;
+    }
+    reader.close();
+    buffReader.close();
+  }
+  public static void WriteFile(String filename, GeodeticPoint gPoint) throws IOException{
+    FileWriter writer = new FileWriter(filename, true);
+    String contur = globalcontur;
+    int number = gPoint.getNum();
+    globalnum = number;
+    double[] coords = gPoint.getCoords();
+    String def_method = gPoint.getMethod_of_Defining();
+    double inaccuracy = gPoint.getInaccuracy();
+    String pin_method = gPoint.getPinning_Method();
+    writer.write(globalcontur);
+    writer.append(';');
+    writer.write(String.valueOf(number));
+    writer.append(';');
+    writer.write(String.valueOf(coords[0]));
+    writer.append(';');
+    writer.write(String.valueOf(coords[1]));
+    writer.append(';');
+    writer.write(def_method);
+    writer.append(';');
+    writer.write(String.valueOf(inaccuracy));
+    writer.append(';');
+    writer.write(pin_method);
+    writer.append('\n');
+    writer.flush();
+    
+  }
+  public static ArrayList getGPointArrayList(){
+    return GPoint;
+  }
+  public static int getGlobalnum(){
+    return FileHandler.globalnum;
+  }
+  public static void TurnArrayListGeodeticPoints(int num, int factor){
+    int index = -1;
+    GeodeticPoint main_point = null;
+    for (int i = 0; i < GPoint.size(); i++){
+      GeodeticPoint gPoint = GPoint.get(i);
+      int current_num = gPoint.getNum();
+      if (current_num == num){
+        index = i;
+        main_point = gPoint;
+        break;
+      }
+    }
+    for (int i = 0; i < GPoint.size(); i++){
+      GeodeticPoint current_point = GPoint.get(i);
+      double inaccuracy = current_point.getInaccuracy();
+      int number = current_point.getNum();
+      String def_method = current_point.getMethod_of_Defining();
+      String pin_method = current_point.getPinning_Method();
+      GeodeticPoint turned_point = current_point.TurnPointAroundOtherPoint(main_point, factor);
+      turned_point.setNum(number);
+      turned_point.setInaccuracy(inaccuracy);
+      turned_point.defineMethod_of_Defining(def_method);
+      turned_point.definePinning_Method(pin_method);
+      GPoint.set(i, turned_point);
+    }
+
+  }
+  public static int getCounter(){
+    return counter;
+  }
+  public static double getArrayListLength(){
+    double length = 0;
+    for (int i = 0; i < GPoint.size()-1; i++){
+      GeodeticPoint gp1 = GPoint.get(i);
+      GeodeticPoint gp2 = GPoint.get(i+1);
+      GeodeticSegment seg = new GeodeticSegment(gp1, gp2);
+      double curr_length = seg.getLength();
+      length += curr_length;
+    }
+    return length;
+  }
+}
